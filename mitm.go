@@ -87,7 +87,11 @@ func (ic *Interceptor) MITM(downstream net.Conn, upstream net.Conn) (newDown net
 		return tlsDown, tlsUp, true, tlsUp.Handshake()
 	} else if adDown.sawAlert() {
 		// Don't MITM, send any received handshake info on to upstream
-		_, err = io.Copy(upstream, rc.Rereader())
+		rr, err := rc.Rereader()
+		if err != nil {
+			return nil, nil, false, fmt.Errorf("Unable to re-attempt TLS connection to upstream: %v", err)
+		}
+		_, err = io.Copy(upstream, rr)
 		if err != nil {
 			return nil, nil, false, err
 		}
