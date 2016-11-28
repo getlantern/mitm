@@ -83,7 +83,9 @@ func (ic *Interceptor) MITM(downstream net.Conn, upstream net.Conn) (newDown net
 	tlsDown := tls.Server(adDown, ic.serverTLSConfig)
 	handshakeErr := tlsDown.Handshake()
 	if handshakeErr == nil {
-		tlsUp := tls.Client(upstream, ic.clientTLSConfig)
+		tlsConfig := makeConfig(ic.clientTLSConfig)
+		tlsConfig.ServerName = tlsDown.ConnectionState().ServerName
+		tlsUp := tls.Client(upstream, tlsConfig)
 		return tlsDown, tlsUp, true, tlsUp.Handshake()
 	} else if adDown.sawAlert() {
 		// Don't MITM, send any received handshake info on to upstream

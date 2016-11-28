@@ -3,12 +3,14 @@ package mitm
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"github.com/getlantern/keyman"
 	"github.com/getlantern/netx"
 	"github.com/getlantern/tlsdefaults"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"net"
+	"os"
 	"sync"
 	"testing"
 )
@@ -16,6 +18,14 @@ import (
 const (
 	text = "hello world"
 )
+
+func init() {
+	// Clean up certs
+	os.Remove("serverpk.pem")
+	os.Remove("servercert.pem")
+	os.Remove("proxypk.pem")
+	os.Remove("proxycert.pem")
+}
 
 // Make sure our pointer copying technique actually works.
 func TestMakeTLS(t *testing.T) {
@@ -58,21 +68,9 @@ func TestMITMNoTLS(t *testing.T) {
 }
 
 func doTest(t *testing.T, listenTLS bool, expectSuccess bool, dial func(proxyAddr string, serverCert *x509.CertPool, proxyCert *x509.CertPool) (net.Conn, error)) {
-	opts := &Opts{
-		PKFile:   "proxypk.pem",
-		CertFile: "proxycert.pem",
-		ClientTLSConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-	}
-
-	ic, err := Configure(opts)
-	if !assert.NoError(t, err) {
-		return
-	}
-
 	// Echo server
 	var l net.Listener
+	var err error
 	if listenTLS {
 		l, err = tlsdefaults.Listen("localhost:0", "serverpk.pem", "servercert.pem")
 	} else {
@@ -83,17 +81,36 @@ func doTest(t *testing.T, listenTLS bool, expectSuccess bool, dial func(proxyAdd
 	}
 	defer l.Close()
 
+	serverCert, err := keyman.LoadCertificateFromFile("servercert.pem")
+	if !assert.NoError(t, err) {
+		return
+	}
+
 	var wg sync.WaitGroup
 	wg.Add(2)
 
 	go func() {
 		defer wg.Done()
-		conn, err := l.Accept()
-		if !assert.NoError(t, err) {
+		conn, acceptErr := l.Accept()
+		if !assert.NoError(t, acceptErr) {
 			return
 		}
 		io.Copy(conn, conn)
 	}()
+
+	// Interceptor
+	opts := &Opts{
+		PKFile:   "proxypk.pem",
+		CertFile: "proxycert.pem",
+		ClientTLSConfig: &tls.Config{
+			RootCAs: serverCert.PoolContainingCert(),
+		},
+	}
+
+	ic, err := Configure(opts)
+	if !assert.NoError(t, err) {
+		return
+	}
 
 	// Proxy server
 	pl, err := net.Listen("tcp", "localhost:0")
@@ -102,11 +119,16 @@ func doTest(t *testing.T, listenTLS bool, expectSuccess bool, dial func(proxyAdd
 	}
 	defer pl.Close()
 
+	proxyCert, err := keyman.LoadCertificateFromFile("proxycert.pem")
+	if !assert.NoError(t, err) {
+		return
+	}
+
 	go func() {
 		defer wg.Done()
 
-		down, err := pl.Accept()
-		if !assert.NoError(t, err) {
+		down, acceptErr := pl.Accept()
+		if !assert.NoError(t, acceptErr) {
 			return
 		}
 		up, err := net.Dial("tcp", l.Addr().String())
@@ -115,6 +137,7 @@ func doTest(t *testing.T, listenTLS bool, expectSuccess bool, dial func(proxyAdd
 		}
 		newDown, newUp, success, err := ic.MITM(down, up)
 		if !assert.NoError(t, err) {
+			fmt.Println(err)
 			return
 		}
 		if expectSuccess {
@@ -124,15 +147,6 @@ func doTest(t *testing.T, listenTLS bool, expectSuccess bool, dial func(proxyAdd
 		newDown.Close()
 		newUp.Close()
 	}()
-
-	serverCert, err := keyman.LoadCertificateFromFile("servercert.pem")
-	if !assert.NoError(t, err) {
-		return
-	}
-	proxyCert, err := keyman.LoadCertificateFromFile("proxycert.pem")
-	if !assert.NoError(t, err) {
-		return
-	}
 
 	conn, err := dial(pl.Addr().String(), serverCert.PoolContainingCert(), proxyCert.PoolContainingCert())
 	if !assert.NoError(t, err) {
