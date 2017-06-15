@@ -20,6 +20,7 @@ const (
 	twoWeeks = oneDay * 14
 	oneMonth = 1
 	oneYear  = 1
+	tenYears = 10 * oneYear
 
 	maxTLSRecordSize = 2 << 15
 )
@@ -122,7 +123,7 @@ func (ic *Interceptor) initCrypto() (err error) {
 		ic.issuingCert, err = ic.pk.TLSCertificateFor(
 			ic.opts.Organization,
 			ic.opts.CommonName,
-			time.Now().AddDate(oneYear, 0, 0),
+			time.Now().AddDate(tenYears, 0, 0),
 			true,
 			nil)
 		if err != nil {
