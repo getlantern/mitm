@@ -39,6 +39,9 @@ type Opts struct {
 	// CommonName: CommonName to use on the generated CA cert for this proxy (defaults to "Lantern")
 	CommonName string
 
+	// InstallCert: If true, the cert will be installed to the system's keystore
+	InstallCert bool
+
 	// ServerTLSConfig: optional configuration for TLS server when MITMing (if nil, a sensible default is used)
 	ServerTLSConfig *tls.Config
 
@@ -132,6 +135,15 @@ func (ic *Interceptor) initCrypto() (err error) {
 		ic.issuingCert.WriteToFile(ic.opts.CertFile)
 	}
 	ic.issuingCertPem = ic.issuingCert.PEMEncoded()
+	if ic.opts.InstallCert {
+		isInstalled, _ := ic.issuingCert.IsInstalled()
+		if !isInstalled {
+			err = ic.issuingCert.AddAsTrustedRoot()
+			if err != nil {
+				return fmt.Errorf("Unable to install issuing cert: %v", err)
+			}
+		}
+	}
 
 	ic.serverTLSConfig = makeConfig(ic.opts.ServerTLSConfig)
 	ic.serverTLSConfig.GetCertificate = ic.makeCertificate
