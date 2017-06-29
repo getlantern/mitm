@@ -27,20 +27,14 @@ const (
 
 // Opts provides options to configure mitm
 type Opts struct {
-	// PKFile: the PEM-encoded file to use as the primary key for this server
-	PKFile string
-
-	// CertFile: the PEM-encoded X509 certificate to use for this server (must match PKFile)
-	CertFile string
-
-	// Organization: Name of the organization to use on the generated CA cert for this  (defaults to "gomitm")
+	// Organization: Name of the organization to use on the generated CA cert for this (defaults to "gomitm")
 	Organization string
 
 	// CommonName: CommonName to use on the generated CA cert for this proxy (defaults to "Lantern")
 	CommonName string
 
-	// InstallCert: If true, the cert will be installed to the system's keystore
-	InstallCert bool
+	// InstallCerts: If true, the site-specific certs will be installed to the system's keystore
+	InstallCerts bool
 
 	// ServerTLSConfig: optional configuration for TLS server when MITMing (if nil, a sensible default is used)
 	ServerTLSConfig *tls.Config
@@ -70,8 +64,6 @@ type Interceptor struct {
 	opts            *Opts
 	pk              *keyman.PrivateKey
 	pkPem           []byte
-	issuingCert     *keyman.Certificate
-	issuingCertPem  []byte
 	serverTLSConfig *tls.Config
 	clientTLSConfig *tls.Config
 	dynamicCerts    *cache.Cache
@@ -113,38 +105,11 @@ func (ic *Interceptor) initCrypto() (err error) {
 	if ic.opts.CommonName == "" {
 		ic.opts.CommonName = "Lantern"
 	}
-	if ic.pk, err = keyman.LoadPKFromFile(ic.opts.PKFile); err != nil {
-		ic.pk, err = keyman.GeneratePK(2048)
-		if err != nil {
-			return fmt.Errorf("Unable to generate private key: %s", err)
-		}
-		ic.pk.WriteToFile(ic.opts.PKFile)
+	ic.pk, err = keyman.GeneratePK(2048)
+	if err != nil {
+		return fmt.Errorf("Unable to generate private key: %s", err)
 	}
 	ic.pkPem = ic.pk.PEMEncoded()
-	ic.issuingCert, err = keyman.LoadCertificateFromFile(ic.opts.CertFile)
-	if err != nil || ic.issuingCert.ExpiresBefore(time.Now().AddDate(0, oneMonth, 0)) {
-		ic.issuingCert, err = ic.pk.TLSCertificateFor(
-			ic.opts.Organization,
-			ic.opts.CommonName,
-			time.Now().AddDate(tenYears, 0, 0),
-			true,
-			nil)
-		if err != nil {
-			return fmt.Errorf("Unable to generate self-signed issuing certificate: %s", err)
-		}
-		ic.issuingCert.WriteToFile(ic.opts.CertFile)
-	}
-	ic.issuingCertPem = ic.issuingCert.PEMEncoded()
-	if ic.opts.InstallCert {
-		isInstalled, _ := ic.issuingCert.IsInstalled()
-		if !isInstalled {
-			err = ic.issuingCert.AddAsTrustedRoot()
-			if err != nil {
-				return fmt.Errorf("Unable to install issuing cert: %v", err)
-			}
-		}
-	}
-
 	ic.serverTLSConfig = makeConfig(ic.opts.ServerTLSConfig)
 	ic.serverTLSConfig.GetCertificate = ic.makeCertificate
 
@@ -179,9 +144,15 @@ func (ic *Interceptor) makeCertificate(clientHello *tls.ClientHelloInfo) (*tls.C
 		name,
 		time.Now().Add(certTTL),
 		false,
-		ic.issuingCert)
+		nil)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to issue certificate: %s", err)
+	}
+	if ic.opts.InstallCerts {
+		err = generatedCert.InstallToUserKeyChain()
+		if err != nil {
+			return nil, fmt.Errorf("Unable to install cert to user keychain")
+		}
 	}
 	keyPair, err := tls.X509KeyPair(generatedCert.PEMEncoded(), ic.pkPem)
 	if err != nil {
