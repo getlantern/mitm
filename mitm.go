@@ -124,11 +124,11 @@ func (ic *Interceptor) initCrypto() (err error) {
 	ic.issuingCert, err = keyman.LoadCertificateFromFile(ic.opts.CertFile)
 	if err != nil || ic.issuingCert.ExpiresBefore(time.Now().AddDate(0, oneMonth, 0)) {
 		ic.issuingCert, err = ic.pk.TLSCertificateFor(
-			ic.opts.Organization,
-			ic.opts.CommonName,
 			time.Now().AddDate(tenYears, 0, 0),
 			true,
-			nil)
+			nil,
+			ic.opts.Organization,
+			ic.opts.CommonName)
 		if err != nil {
 			return fmt.Errorf("Unable to generate self-signed issuing certificate: %s", err)
 		}
@@ -175,11 +175,11 @@ func (ic *Interceptor) makeCertificate(clientHello *tls.ClientHelloInfo) (*tls.C
 	// Still not found, create certificate
 	certTTL := twoWeeks
 	generatedCert, err := ic.pk.TLSCertificateFor(
-		ic.opts.Organization,
-		name,
 		time.Now().Add(certTTL),
 		false,
-		ic.issuingCert)
+		ic.issuingCert,
+		ic.opts.Organization,
+		name)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to issue certificate: %s", err)
 	}
