@@ -138,7 +138,7 @@ func (ic *Interceptor) initCrypto() (err error) {
 	if ic.opts.InstallCert {
 		isInstalled, _ := ic.issuingCert.IsInstalled()
 		if !isInstalled {
-			err = ic.issuingCert.AddAsTrustedRoot()
+			err = ic.issuingCert.AddAsTrustedRoot("Lantern wants to install a root certificate in order to unblock your traffic")
 			if err != nil {
 				return fmt.Errorf("Unable to install issuing cert: %v", err)
 			}
