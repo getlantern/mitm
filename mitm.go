@@ -12,6 +12,7 @@ import (
 
 	"github.com/getlantern/go-cache/cache"
 	"github.com/getlantern/keyman"
+	"github.com/getlantern/netx"
 	"github.com/getlantern/reconn"
 )
 
@@ -87,6 +88,17 @@ func (ic *Interceptor) MITM(downstream net.Conn, upstream net.Conn) (newDown net
 	tlsDown := tls.Server(adDown, ic.serverTLSConfig)
 	handshakeErr := tlsDown.Handshake()
 	if handshakeErr == nil {
+		skipTLS := false
+		netx.WalkWrapped(upstream, func(wrapped net.Conn) bool {
+			_, dontEncrypt := wrapped.(dontEncryptConn)
+			if dontEncrypt {
+				skipTLS = true
+			}
+			return !dontEncrypt
+		})
+		if skipTLS {
+			return tlsDown, upstream, true, nil
+		}
 		tlsConfig := makeConfig(ic.clientTLSConfig)
 		tlsConfig.ServerName = tlsDown.ConnectionState().ServerName
 		tlsUp := tls.Client(upstream, tlsConfig)
@@ -203,4 +215,13 @@ func makeConfig(template *tls.Config) *tls.Config {
 		*tlsConfig = *template
 	}
 	return tlsConfig
+}
+
+// dontEncryptConn is a marker interface for upstream connections that shouldn't
+// be encrypted.
+type dontEncryptConn interface {
+	net.Conn
+
+	// Implement this method to tell mitm to skip encrypting on this connection
+	MITMSkipEncryption()
 }
