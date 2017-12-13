@@ -3,10 +3,13 @@
 package mitm
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,11 +37,11 @@ type Opts struct {
 	// CertFile: the PEM-encoded X509 certificate to use for this server (must match PKFile)
 	CertFile string
 
-	// Organization: Name of the organization to use on the generated CA cert for this  (defaults to "gomitm")
+	// Organization: Name of the organization to use on the generated CA cert for this  (defaults to "Lantern")
 	Organization string
 
-	// CommonName: CommonName to use on the generated CA cert for this proxy (defaults to "Lantern")
-	CommonName string
+	// Domains: list of domain names to use as Subject Alternate Names
+	Domains []string
 
 	// InstallCert: If true, the cert will be installed to the system's keystore
 	InstallCert bool
@@ -119,11 +122,17 @@ func (ic *Interceptor) MITM(downstream net.Conn, upstream net.Conn) (newDown net
 }
 
 func (ic *Interceptor) initCrypto() (err error) {
-	if ic.opts.Organization == "" {
-		ic.opts.Organization = "gomitm"
+	// Use a hash of all domains as the common name for our cert (unique key)
+	allDomains := strings.Join(ic.opts.Domains, ",")
+	domainsHash := sha256.Sum256([]byte(allDomains))
+	certID := hex.EncodeToString(domainsHash[:])
+	certFile := fmt.Sprintf("%v_%v", ic.opts.CertFile, certID)
+
+	if len(ic.opts.Domains) == 0 {
+		return fmt.Errorf("MITM options need at least one domain")
 	}
-	if ic.opts.CommonName == "" {
-		ic.opts.CommonName = "Lantern"
+	if ic.opts.Organization == "" {
+		ic.opts.Organization = "Lantern"
 	}
 	if ic.pk, err = keyman.LoadPKFromFile(ic.opts.PKFile); err != nil {
 		ic.pk, err = keyman.GeneratePK(2048)
@@ -133,24 +142,27 @@ func (ic *Interceptor) initCrypto() (err error) {
 		ic.pk.WriteToFile(ic.opts.PKFile)
 	}
 	ic.pkPem = ic.pk.PEMEncoded()
-	ic.issuingCert, err = keyman.LoadCertificateFromFile(ic.opts.CertFile)
+	ic.issuingCert, err = keyman.LoadCertificateFromFile(certFile)
+
 	if err != nil || ic.issuingCert.ExpiresBefore(time.Now().AddDate(0, oneMonth, 0)) {
 		ic.issuingCert, err = ic.pk.TLSCertificateFor(
 			time.Now().AddDate(tenYears, 0, 0),
-			true,
+			false,
 			nil,
 			ic.opts.Organization,
-			ic.opts.CommonName)
+			fmt.Sprintf("%v_%v", ic.opts.Organization, certID),
+			ic.opts.Domains...,
+		)
 		if err != nil {
 			return fmt.Errorf("Unable to generate self-signed issuing certificate: %s", err)
 		}
-		ic.issuingCert.WriteToFile(ic.opts.CertFile)
+		ic.issuingCert.WriteToFile(certFile)
 	}
 	ic.issuingCertPem = ic.issuingCert.PEMEncoded()
 	if ic.opts.InstallCert {
 		isInstalled, _ := ic.issuingCert.IsInstalled()
 		if !isInstalled {
-			err = ic.issuingCert.AddAsTrustedRoot("Lantern wants to install a root certificate in order to unblock your traffic")
+			err = ic.issuingCert.AddAsTrustedRoot("Lantern wants to install a custom certificate in order to unblock your traffic")
 			if err != nil {
 				return fmt.Errorf("Unable to install issuing cert: %v", err)
 			}
@@ -170,38 +182,13 @@ func (ic *Interceptor) makeCertificate(clientHello *tls.ClientHelloInfo) (*tls.C
 		return nil, fmt.Errorf("No ServerName provided")
 	}
 
-	// Try to read an existing cert
-	kpCandidateIf, found := ic.dynamicCerts.Get(name)
-	if found {
-		return kpCandidateIf.(*tls.Certificate), nil
-	}
-
-	// Existing cert not found, lock for writing and recheck
-	ic.certMutex.Lock()
-	defer ic.certMutex.Unlock()
-	kpCandidateIf, found = ic.dynamicCerts.Get(name)
-	if found {
-		return kpCandidateIf.(*tls.Certificate), nil
-	}
-
-	// Still not found, create certificate
-	certTTL := twoWeeks
-	generatedCert, err := ic.pk.TLSCertificateFor(
-		time.Now().Add(certTTL),
-		false,
-		ic.issuingCert,
-		ic.opts.Organization,
-		name)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to issue certificate: %s", err)
-	}
-	keyPair, err := tls.X509KeyPair(generatedCert.PEMEncoded(), ic.pkPem)
+	keyPair, err := tls.X509KeyPair(ic.issuingCertPem, ic.pkPem)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to parse keypair for tls: %s", err)
 	}
 
 	// Add to cache, set to expire 1 day before the cert expires
-	cacheTTL := certTTL - oneDay
+	cacheTTL := 365*24*time.Hour - oneDay
 	ic.dynamicCerts.Set(name, &keyPair, cacheTTL)
 	return &keyPair, nil
 }
