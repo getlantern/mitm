@@ -46,6 +46,10 @@ type Opts struct {
 	// InstallCert: If true, the cert will be installed to the system's keystore
 	InstallCert bool
 
+	// InstallPrompt: the text to use when prompting the user to install the MITM
+	// cert to the system's keystore.
+	InstallPrompt string
+
 	// ServerTLSConfig: optional configuration for TLS server when MITMing (if nil, a sensible default is used)
 	ServerTLSConfig *tls.Config
 
@@ -58,6 +62,9 @@ type Opts struct {
 // connection is not MITM'ed. The primary key and certificate used to generate
 // and sign MITM certificates are auto-created if not already present.
 func Configure(opts *Opts) (*Interceptor, error) {
+	if opts.InstallPrompt == "" {
+		opts.InstallPrompt = "Please enter your password to install certificate"
+	}
 	ic := &Interceptor{
 		opts:         opts,
 		dynamicCerts: cache.NewCache(),
@@ -162,7 +169,7 @@ func (ic *Interceptor) initCrypto() (err error) {
 	if ic.opts.InstallCert {
 		isInstalled, _ := ic.issuingCert.IsInstalled()
 		if !isInstalled {
-			err = ic.issuingCert.AddAsTrustedRoot("Lantern wants to install a custom certificate in order to unblock your traffic")
+			err = ic.issuingCert.AddAsTrustedRoot(ic.opts.InstallPrompt)
 			if err != nil {
 				return fmt.Errorf("Unable to install issuing cert: %v", err)
 			}
