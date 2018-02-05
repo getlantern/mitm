@@ -129,18 +129,14 @@ func (ic *Interceptor) MITM(downstream net.Conn, upstream net.Conn) (newDown net
 }
 
 func (ic *Interceptor) initCrypto() (err error) {
-	// Use a hash of all domains as the common name for our cert (unique key)
-	allDomains := strings.Join(ic.opts.Domains, ",")
-	domainsHash := sha256.Sum256([]byte(allDomains))
-	certID := hex.EncodeToString(domainsHash[:])
-	certFile := fmt.Sprintf("%v_%v", ic.opts.CertFile, certID)
-
 	if len(ic.opts.Domains) == 0 {
 		return fmt.Errorf("MITM options need at least one domain")
 	}
 	if ic.opts.Organization == "" {
 		ic.opts.Organization = "Lantern"
 	}
+
+	// Load/generate the private key
 	if ic.pk, err = keyman.LoadPKFromFile(ic.opts.PKFile); err != nil {
 		ic.pk, err = keyman.GeneratePK(2048)
 		if err != nil {
@@ -149,6 +145,14 @@ func (ic *Interceptor) initCrypto() (err error) {
 		ic.pk.WriteToFile(ic.opts.PKFile)
 	}
 	ic.pkPem = ic.pk.PEMEncoded()
+
+	publicKey := ic.pk.RSA().PublicKey
+	// Use a hash of the modulues and exponent of the public key plus and all domains as the common name for our cert (unique key)
+	certificateKey := fmt.Sprintf("%v_%v_%v", publicKey.N, publicKey.E, strings.Join(ic.opts.Domains, ","))
+	certificateHash := sha256.Sum256([]byte(certificateKey))
+	certID := hex.EncodeToString(certificateHash[:])
+	certFile := fmt.Sprintf("%v_%v", ic.opts.CertFile, certID)
+
 	ic.issuingCert, err = keyman.LoadCertificateFromFile(certFile)
 
 	if err != nil || ic.issuingCert.ExpiresBefore(time.Now().AddDate(0, oneMonth, 0)) {

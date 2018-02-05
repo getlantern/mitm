@@ -105,6 +105,7 @@ func doTest(t *testing.T, listenTLS bool, expectSuccess bool, dial func(proxyAdd
 		ClientTLSConfig: &tls.Config{
 			RootCAs: serverCert.PoolContainingCert(),
 		},
+		Domains: []string{"localhost"},
 	}
 
 	ic, err := Configure(opts)
