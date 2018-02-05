@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -49,6 +51,14 @@ type Opts struct {
 	// InstallPrompt: the text to use when prompting the user to install the MITM
 	// cert to the system's keystore.
 	InstallPrompt string
+
+	// WindowsPromptTitle: on windows, the certificate installation will actually
+	// use a system-standard escalation prompt, but we can first prompt with a
+	// dialog box using this title in order to prepare the user for what's coming.
+	WindowsPromptTitle string
+
+	// WindowsPromptBody: dialog body to go with WindowsPromptTitle
+	WindowsPromptBody string
 
 	// ServerTLSConfig: optional configuration for TLS server when MITMing (if nil, a sensible default is used)
 	ServerTLSConfig *tls.Config
@@ -173,6 +183,13 @@ func (ic *Interceptor) initCrypto() (err error) {
 	if ic.opts.InstallCert {
 		isInstalled, _ := ic.issuingCert.IsInstalled()
 		if !isInstalled {
+			if runtime.GOOS == "windows" && ic.opts.WindowsPromptTitle != "" && ic.opts.WindowsPromptBody != "" {
+				cmd := exec.Command("mshta", fmt.Sprintf("javascript: var sh=new ActiveXObject('WScript.Shell'); sh.Popup('%v', 0, '%v', 64); close()", ic.opts.WindowsPromptBody, ic.opts.WindowsPromptTitle))
+				promptErr := cmd.Run()
+				if promptErr != nil {
+					return fmt.Errorf("Unable to show windows prompt for installing certificate: %v", promptErr)
+				}
+			}
 			err = ic.issuingCert.AddAsTrustedRoot(ic.opts.InstallPrompt)
 			if err != nil {
 				return fmt.Errorf("Unable to install issuing cert: %v", err)
