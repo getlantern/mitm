@@ -60,6 +60,9 @@ type Opts struct {
 	// WindowsPromptBody: dialog body to go with WindowsPromptTitle
 	WindowsPromptBody string
 
+	// InstallCertResult: optional callback that gets invoked whenever the user is prompted to install a cert
+	InstallCertResult func(success bool)
+
 	// ServerTLSConfig: optional configuration for TLS server when MITMing (if nil, a sensible default is used)
 	ServerTLSConfig *tls.Config
 
@@ -183,6 +186,10 @@ func (ic *Interceptor) initCrypto() (err error) {
 	if ic.opts.InstallCert {
 		isInstalled, _ := ic.issuingCert.IsInstalled()
 		if !isInstalled {
+			success := false
+			if ic.opts.InstallCertResult != nil {
+				defer ic.opts.InstallCertResult(success)
+			}
 			if runtime.GOOS == "windows" && ic.opts.WindowsPromptTitle != "" && ic.opts.WindowsPromptBody != "" {
 				cmd := exec.Command("mshta", fmt.Sprintf("javascript: var sh=new ActiveXObject('WScript.Shell'); sh.Popup('%v', 0, '%v', 64); close()", ic.opts.WindowsPromptBody, ic.opts.WindowsPromptTitle))
 				promptErr := cmd.Run()
@@ -194,6 +201,7 @@ func (ic *Interceptor) initCrypto() (err error) {
 			if err != nil {
 				return fmt.Errorf("Unable to install issuing cert: %v", err)
 			}
+			success = true
 		}
 	}
 
