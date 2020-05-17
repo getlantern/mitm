@@ -189,7 +189,9 @@ func (ic *Interceptor) initCrypto() (err error) {
 		if !isInstalled {
 			var installErr error
 			if ic.opts.InstallCertResult != nil {
-				defer ic.opts.InstallCertResult(installErr)
+				defer func() {
+					ic.opts.InstallCertResult(installErr)
+				}()
 			}
 			if runtime.GOOS == "windows" && ic.opts.WindowsPromptTitle != "" && ic.opts.WindowsPromptBody != "" {
 				cmd := exec.Command("mshta", fmt.Sprintf("javascript: var sh=new ActiveXObject('WScript.Shell'); sh.Popup('%v', 0, '%v', 64); close()", ic.opts.WindowsPromptBody, ic.opts.WindowsPromptTitle))
