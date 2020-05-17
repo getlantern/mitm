@@ -60,8 +60,9 @@ type Opts struct {
 	// WindowsPromptBody: dialog body to go with WindowsPromptTitle
 	WindowsPromptBody string
 
-	// InstallCertResult: optional callback that gets invoked whenever the user is prompted to install a cert
-	InstallCertResult func(success bool)
+	// InstallCertResult: optional callback that gets invoked whenever the user is prompted to install a cert.
+	// If err is nil, the cert was installed successfully
+	InstallCertResult func(err error)
 
 	// ServerTLSConfig: optional configuration for TLS server when MITMing (if nil, a sensible default is used)
 	ServerTLSConfig *tls.Config
@@ -186,22 +187,23 @@ func (ic *Interceptor) initCrypto() (err error) {
 	if ic.opts.InstallCert {
 		isInstalled, _ := ic.issuingCert.IsInstalled()
 		if !isInstalled {
-			success := false
+			var installErr error
 			if ic.opts.InstallCertResult != nil {
-				defer ic.opts.InstallCertResult(success)
+				defer ic.opts.InstallCertResult(installErr)
 			}
 			if runtime.GOOS == "windows" && ic.opts.WindowsPromptTitle != "" && ic.opts.WindowsPromptBody != "" {
 				cmd := exec.Command("mshta", fmt.Sprintf("javascript: var sh=new ActiveXObject('WScript.Shell'); sh.Popup('%v', 0, '%v', 64); close()", ic.opts.WindowsPromptBody, ic.opts.WindowsPromptTitle))
 				promptErr := cmd.Run()
 				if promptErr != nil {
-					return fmt.Errorf("Unable to show windows prompt for installing certificate: %v", promptErr)
+					installErr = fmt.Errorf("Unable to show windows prompt for installing certificate: %v", promptErr)
+					return installErr
 				}
 			}
 			err = ic.issuingCert.AddAsTrustedRoot(ic.opts.InstallPrompt)
 			if err != nil {
-				return fmt.Errorf("Unable to install issuing cert: %v", err)
+				installErr = fmt.Errorf("Unable to install issuing cert: %v", err)
+				return installErr
 			}
-			success = true
 		}
 	}
 
