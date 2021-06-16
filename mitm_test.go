@@ -20,22 +20,6 @@ const (
 	text = "hello world"
 )
 
-func init() {
-	// Clean up certs
-	os.Remove("serverpk.pem")
-	os.Remove("servercert.pem")
-	os.Remove("proxypk.pem")
-	files, err := filepath.Glob("proxycert.pem_*")
-	if err != nil {
-		panic(err)
-	}
-	for _, f := range files {
-		if err := os.Remove(f); err != nil {
-			panic(err)
-		}
-	}
-}
-
 // Make sure our pointer copying technique actually works.
 func TestMakeTLS(t *testing.T) {
 	template := &tls.Config{ServerName: "test"}
@@ -77,6 +61,13 @@ func TestMITMNoTLS(t *testing.T) {
 }
 
 func doTest(t *testing.T, listenTLS bool, expectSuccess bool, dial func(proxyAddr string, serverCert *x509.CertPool, proxyCert *x509.CertPool) (net.Conn, error)) {
+	// make sure to clean up the temporary PEM files
+	defer func() {
+		files, _ := filepath.Glob("*.pem*")
+		for _, f := range files {
+			os.Remove(f)
+		}
+	}()
 	// Echo server
 	var l net.Listener
 	var err error
