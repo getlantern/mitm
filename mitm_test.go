@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 )
@@ -24,7 +25,15 @@ func init() {
 	os.Remove("serverpk.pem")
 	os.Remove("servercert.pem")
 	os.Remove("proxypk.pem")
-	os.Remove("proxycert.pem")
+	files, err := filepath.Glob("proxycert.pem_*")
+	if err != nil {
+		panic(err)
+	}
+	for _, f := range files {
+		if err := os.Remove(f); err != nil {
+			panic(err)
+		}
+	}
 }
 
 // Make sure our pointer copying technique actually works.
@@ -120,7 +129,7 @@ func doTest(t *testing.T, listenTLS bool, expectSuccess bool, dial func(proxyAdd
 	}
 	defer pl.Close()
 
-	proxyCert, err := keyman.LoadCertificateFromFile("proxycert.pem")
+	proxyCert, err := keyman.LoadCertificateFromFile(ic.issuingCertFile)
 	if !assert.NoError(t, err) {
 		return
 	}

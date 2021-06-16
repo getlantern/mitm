@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os/exec"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -95,6 +93,7 @@ type Interceptor struct {
 	opts            *Opts
 	pk              *keyman.PrivateKey
 	pkPem           []byte
+	issuingCertFile string
 	issuingCert     *keyman.Certificate
 	issuingCertPem  []byte
 	serverTLSConfig *tls.Config
@@ -166,7 +165,7 @@ func (ic *Interceptor) initCrypto() (err error) {
 	certificateHash := sha256.Sum256([]byte(certificateKey))
 	certID := hex.EncodeToString(certificateHash[:])
 	certFile := fmt.Sprintf("%v_%v", ic.opts.CertFile, certID)
-
+	ic.issuingCertFile = certFile
 	ic.issuingCert, err = keyman.LoadCertificateFromFile(certFile)
 
 	if err != nil || ic.issuingCert.ExpiresBefore(time.Now().AddDate(0, oneMonth, 0)) {
@@ -185,27 +184,17 @@ func (ic *Interceptor) initCrypto() (err error) {
 	}
 	ic.issuingCertPem = ic.issuingCert.PEMEncoded()
 	if ic.opts.InstallCert {
-		isInstalled, _ := ic.issuingCert.IsInstalled()
-		if !isInstalled {
-			var installErr error
-			if ic.opts.InstallCertResult != nil {
-				defer func() {
-					ic.opts.InstallCertResult(installErr)
-				}()
-			}
-			if runtime.GOOS == "windows" && ic.opts.WindowsPromptTitle != "" && ic.opts.WindowsPromptBody != "" {
-				cmd := exec.Command("mshta", fmt.Sprintf("javascript: var sh=new ActiveXObject('WScript.Shell'); sh.Popup('%v', 0, '%v', 64); close()", ic.opts.WindowsPromptBody, ic.opts.WindowsPromptTitle))
-				promptErr := cmd.Run()
-				if promptErr != nil {
-					installErr = fmt.Errorf("Unable to show windows prompt for installing certificate: %v", promptErr)
-					return installErr
-				}
-			}
-			err = ic.issuingCert.AddAsTrustedRoot(ic.opts.InstallPrompt)
-			if err != nil {
-				installErr = fmt.Errorf("Unable to install issuing cert: %v", err)
-				return installErr
-			}
+		var installErr error
+		if ic.opts.InstallCertResult != nil {
+			defer func() {
+				ic.opts.InstallCertResult(installErr)
+			}()
+		}
+		err = ic.issuingCert.AddAsTrustedRootIfNeeded(ic.opts.InstallPrompt, ic.opts.WindowsPromptTitle, ic.opts.WindowsPromptBody)
+
+		if err != nil {
+			installErr = fmt.Errorf("unable to install issuing cert: %v", err)
+			return installErr
 		}
 	}
 
