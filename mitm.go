@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -126,7 +127,7 @@ func (ic *Interceptor) MITM(downstream net.Conn, upstream net.Conn) (newDown net
 		tlsConfig.ServerName = tlsDown.ConnectionState().ServerName
 		tlsUp := tls.Client(upstream, tlsConfig)
 		return tlsDown, tlsUp, true, tlsUp.Handshake()
-	} else if adDown.sawAlert() {
+	} else if adDown.sawAlert() || errors.As(handshakeErr, &tls.RecordHeaderError{}) {
 		// Don't MITM, send any received handshake info on to upstream
 		rr, err := rc.Rereader()
 		if err != nil {
@@ -164,9 +165,9 @@ func (ic *Interceptor) initCrypto() (err error) {
 	certificateKey := fmt.Sprintf("%v_%v_%v", publicKey.N, publicKey.E, strings.Join(ic.opts.Domains, ","))
 	certificateHash := sha256.Sum256([]byte(certificateKey))
 	certID := hex.EncodeToString(certificateHash[:])
-	certFile := fmt.Sprintf("%v_%v", ic.opts.CertFile, certID)
-	ic.issuingCertFile = certFile
-	ic.issuingCert, err = keyman.LoadCertificateFromFile(certFile)
+	ic.issuingCertFile = fmt.Sprintf("%v_%v", ic.opts.CertFile, certID)
+
+	ic.issuingCert, err = keyman.LoadCertificateFromFile(ic.issuingCertFile)
 
 	if err != nil || ic.issuingCert.ExpiresBefore(time.Now().AddDate(0, oneMonth, 0)) {
 		ic.issuingCert, err = ic.pk.TLSCertificateFor(
@@ -180,7 +181,7 @@ func (ic *Interceptor) initCrypto() (err error) {
 		if err != nil {
 			return fmt.Errorf("Unable to generate self-signed issuing certificate: %s", err)
 		}
-		ic.issuingCert.WriteToFile(certFile)
+		ic.issuingCert.WriteToFile(ic.issuingCertFile)
 	}
 	ic.issuingCertPem = ic.issuingCert.PEMEncoded()
 	if ic.opts.InstallCert {

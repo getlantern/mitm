@@ -4,16 +4,17 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"github.com/getlantern/keyman"
-	"github.com/getlantern/netx"
-	"github.com/getlantern/tlsdefaults"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
+
+	"github.com/getlantern/keyman"
+	"github.com/getlantern/netx"
+	"github.com/getlantern/tlsdefaults"
+	"github.com/stretchr/testify/assert"
 )
 
 const (
