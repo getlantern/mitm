@@ -4,15 +4,16 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"github.com/getlantern/keyman"
-	"github.com/getlantern/netx"
-	"github.com/getlantern/tlsdefaults"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"net"
 	"os"
 	"sync"
 	"testing"
+
+	"github.com/getlantern/keyman"
+	"github.com/getlantern/netx"
+	"github.com/getlantern/tlsdefaults"
+	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -120,7 +121,7 @@ func doTest(t *testing.T, listenTLS bool, expectSuccess bool, dial func(proxyAdd
 	}
 	defer pl.Close()
 
-	proxyCert, err := keyman.LoadCertificateFromFile("proxycert.pem")
+	proxyCert, err := keyman.LoadCertificateFromFile(ic.issuingCertFile)
 	if !assert.NoError(t, err) {
 		return
 	}
