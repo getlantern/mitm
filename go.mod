@@ -7,7 +7,7 @@ require (
 	github.com/getlantern/go-cache v0.0.0-20141028142048-88b53914f467
 	github.com/getlantern/golog v0.0.0-20210606115803-bce9f9fe5a5f // indirect
 	github.com/getlantern/hidden v0.0.0-20201229170000-e66e7f878730 // indirect
-	github.com/getlantern/keyman v0.0.0-20210617095417-e79bb7b4f83f
+	github.com/getlantern/keyman v0.0.0-20210617141903-0ed59d0ff67a
 	github.com/getlantern/mockconn v0.0.0-20200818071412-cb30d065a848 // indirect
 	github.com/getlantern/mtime v0.0.0-20200417132445-23682092d1f7 // indirect
 	github.com/getlantern/netx v0.0.0-20190110220209-9912de6f94fd
