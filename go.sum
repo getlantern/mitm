@@ -35,6 +35,8 @@ github.com/getlantern/keyman v0.0.0-20210617095417-e79bb7b4f83f h1:AyEyNRxN9+Jl4
 github.com/getlantern/keyman v0.0.0-20210617095417-e79bb7b4f83f/go.mod h1:lzCwzxjE8ciu+2bZku7kcCKfOYAXUs4stPn3elouYNI=
 github.com/getlantern/keyman v0.0.0-20210617141903-0ed59d0ff67a h1:6cwv9SdU4VZH5rV3fFX2ZR2ACz+DqWuDhjlkx9lIkAw=
 github.com/getlantern/keyman v0.0.0-20210617141903-0ed59d0ff67a/go.mod h1:lzCwzxjE8ciu+2bZku7kcCKfOYAXUs4stPn3elouYNI=
+github.com/getlantern/keyman v0.0.0-20210621071711-e6184e6e7d7b h1:9/teW2SCsm5fRfUO3WlmgczSRCOUOKrpnZKEjZTGMRw=
+github.com/getlantern/keyman v0.0.0-20210621071711-e6184e6e7d7b/go.mod h1:lzCwzxjE8ciu+2bZku7kcCKfOYAXUs4stPn3elouYNI=
 github.com/getlantern/mockconn v0.0.0-20200818071412-cb30d065a848 h1:2MhMMVBTnaHrst6HyWFDhwQCaJ05PZuOv1bE2gN8WFY=
 github.com/getlantern/mockconn v0.0.0-20200818071412-cb30d065a848/go.mod h1:+F5GJ7qGpQ03DBtcOEyQpM30ix4BLswdaojecFtsdy8=
 github.com/getlantern/mtime v0.0.0-20200417132445-23682092d1f7 h1:03J6Cb42EG06lHgpOFGm5BOax4qFqlSbSeKO2RGrj2g=

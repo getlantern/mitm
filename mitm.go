@@ -185,20 +185,13 @@ func (ic *Interceptor) initCrypto() (err error) {
 	}
 	ic.issuingCertPem = ic.issuingCert.PEMEncoded()
 	if ic.opts.InstallCert {
-		var installErr error
-		var installPerformed bool
-		if ic.opts.InstallCertResult != nil {
-			defer func() {
-				if installPerformed {
-					ic.opts.InstallCertResult(installErr)
-				}
-			}()
-		}
-		installPerformed, err = ic.issuingCert.AddAsTrustedRootIfNeeded(ic.opts.InstallPrompt, ic.opts.WindowsPromptTitle, ic.opts.WindowsPromptBody)
 
-		if err != nil {
-			installErr = fmt.Errorf("unable to install issuing cert: %v", err)
-			return installErr
+		if err = ic.issuingCert.AddAsTrustedRootIfNeeded(ic.opts.InstallPrompt, ic.opts.WindowsPromptTitle, ic.opts.WindowsPromptBody, func(e error) {
+			if ic.opts.InstallCertResult != nil {
+				ic.opts.InstallCertResult(e)
+			}
+		}); err != nil {
+			return fmt.Errorf("unable to install issuing cert: %v", err)
 		}
 	}
 
