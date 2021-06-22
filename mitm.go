@@ -10,8 +10,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os/exec"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -187,27 +185,13 @@ func (ic *Interceptor) initCrypto() (err error) {
 	}
 	ic.issuingCertPem = ic.issuingCert.PEMEncoded()
 	if ic.opts.InstallCert {
-		isInstalled, _ := ic.issuingCert.IsInstalled()
-		if !isInstalled {
-			var installErr error
+
+		if err = ic.issuingCert.AddAsTrustedRootIfNeeded(ic.opts.InstallPrompt, ic.opts.WindowsPromptTitle, ic.opts.WindowsPromptBody, func(e error) {
 			if ic.opts.InstallCertResult != nil {
-				defer func() {
-					ic.opts.InstallCertResult(installErr)
-				}()
+				ic.opts.InstallCertResult(e)
 			}
-			if runtime.GOOS == "windows" && ic.opts.WindowsPromptTitle != "" && ic.opts.WindowsPromptBody != "" {
-				cmd := exec.Command("mshta", fmt.Sprintf("javascript: var sh=new ActiveXObject('WScript.Shell'); sh.Popup('%v', 0, '%v', 64); close()", ic.opts.WindowsPromptBody, ic.opts.WindowsPromptTitle))
-				promptErr := cmd.Run()
-				if promptErr != nil {
-					installErr = fmt.Errorf("Unable to show windows prompt for installing certificate: %v", promptErr)
-					return installErr
-				}
-			}
-			err = ic.issuingCert.AddAsTrustedRoot(ic.opts.InstallPrompt)
-			if err != nil {
-				installErr = fmt.Errorf("Unable to install issuing cert: %v", err)
-				return installErr
-			}
+		}); err != nil {
+			return fmt.Errorf("unable to install issuing cert: %v", err)
 		}
 	}
 

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -21,11 +22,12 @@ const (
 )
 
 func init() {
-	// Clean up certs
-	os.Remove("serverpk.pem")
-	os.Remove("servercert.pem")
-	os.Remove("proxypk.pem")
-	os.Remove("proxycert.pem")
+	// make sure to clean up the temporary PEM files
+	files, _ := filepath.Glob("*.pem*")
+	for _, f := range files {
+		os.Remove(f)
+	}
+
 }
 
 // Make sure our pointer copying technique actually works.
