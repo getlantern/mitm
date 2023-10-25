@@ -225,7 +225,7 @@ func makeConfig(template *tls.Config) *tls.Config {
 	tlsConfig := &tls.Config{}
 	if template != nil {
 		// Copy the provided tlsConfig
-		*tlsConfig = *template
+		*tlsConfig = *template.Clone()
 	}
 	return tlsConfig
 }
