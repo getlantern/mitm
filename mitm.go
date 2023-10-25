@@ -11,7 +11,6 @@ import (
 	"io"
 	"net"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/getlantern/go-cache/cache"
@@ -100,7 +99,6 @@ type Interceptor struct {
 	serverTLSConfig *tls.Config
 	clientTLSConfig *tls.Config
 	dynamicCerts    *cache.Cache
-	certMutex       sync.Mutex
 }
 
 // MITM man-in-the-middles a pair of connections, returning the connections that
@@ -131,7 +129,7 @@ func (ic *Interceptor) MITM(downstream net.Conn, upstream net.Conn) (newDown net
 		// Don't MITM, send any received handshake info on to upstream
 		rr, err := rc.Rereader()
 		if err != nil {
-			return nil, nil, false, fmt.Errorf("Unable to re-attempt TLS connection to upstream: %v", err)
+			return nil, nil, false, fmt.Errorf("unable to re-attempt TLS connection to upstream: %v", err)
 		}
 		_, err = io.Copy(upstream, rr)
 		if err != nil {
@@ -154,7 +152,7 @@ func (ic *Interceptor) initCrypto() (err error) {
 	if ic.pk, err = keyman.LoadPKFromFile(ic.opts.PKFile); err != nil {
 		ic.pk, err = keyman.GeneratePK(2048)
 		if err != nil {
-			return fmt.Errorf("Unable to generate private key: %s", err)
+			return fmt.Errorf("unable to generate private key: %s", err)
 		}
 		ic.pk.WriteToFile(ic.opts.PKFile)
 	}
@@ -179,7 +177,7 @@ func (ic *Interceptor) initCrypto() (err error) {
 			ic.opts.Domains...,
 		)
 		if err != nil {
-			return fmt.Errorf("Unable to generate self-signed issuing certificate: %s", err)
+			return fmt.Errorf("unable to generate self-signed issuing certificate: %s", err)
 		}
 		ic.issuingCert.WriteToFile(ic.issuingCertFile)
 	}
@@ -205,12 +203,12 @@ func (ic *Interceptor) initCrypto() (err error) {
 func (ic *Interceptor) makeCertificate(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	name := clientHello.ServerName
 	if name == "" {
-		return nil, fmt.Errorf("No ServerName provided")
+		return nil, fmt.Errorf("no ServerName provided")
 	}
 
 	keyPair, err := tls.X509KeyPair(ic.issuingCertPem, ic.pkPem)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to parse keypair for tls: %s", err)
+		return nil, fmt.Errorf("unable to parse keypair for tls: %s", err)
 	}
 
 	// Add to cache, set to expire 1 day before the cert expires
